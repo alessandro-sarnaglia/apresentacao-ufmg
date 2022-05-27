@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Regressão segmentada com abordagem bayesiana para dados de contagem</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Alessandro J. Q. Sarnaglia" />
+    <script src="libs/header-attrs/header-attrs.js"></script>
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.7.0/animate.min.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+.title[
+# Regressão segmentada com abordagem bayesiana para dados de contagem
+]
+.subtitle[
+## Aplicação para estimação do limiar crítico de poluição do ar em admissões hospitalares
+]
+.author[
+### Alessandro J. Q. Sarnaglia
+]
+.institute[
+### Lecon e DasLab - DEST/UFES
+]
+
+---
+
+class: animated, fadeIn, middle
+
+[//]: &lt;&gt; (https://pkg.garrickadenbuie.com/extra-awesome-xaringan/intro/index.html#1)
+[//]: &lt;&gt; (https://pkg.garrickadenbuie.com/xaringanthemer/articles/xaringanthemer.html)
+[//]: &lt;&gt; (https://www.biostatistics.dk/talks/CopenhagenRuseRs-2019/index.html#1)
+[//]: &lt;&gt; (https://rstudio-education.github.io/sharing-short-notice/#1)
+[//]: &lt;&gt; (https://www.kirenz.com/slides/xaringan-demo-slides.html#1)
+[//]: &lt;&gt; (https://github.com/yihui/xaringan/issues/26)
+[//]: &lt;&gt; (https://pkg.garrickadenbuie.com/countdown/#1)
+
+
+
+
+
+&lt;style&gt; body {text-align: justify} &lt;/style&gt; &lt;!-- Justify text. --&gt;
+
+
+
+
+
+# Sumário
+
+- Motivação
+- Modelo Linear Generalizado Segmentado
+- Metodologia proposta
+- Experimento de Monte Carlo
+- Ilustração em dados reais
+- Referências
+
+---
+class: animated, inverse, middle, center, fadeIn
+# Motivação
+
+---
+class: animated, fadeIn
+
+## Motivação - I
+Diversos estudos tem apontado os efeitos deletérios de poluentes atmosféricos na saúde humana.
+
+--
+
+Pelo ponto de vista fisiológico, os poluentes tem sido associados a doenças dos sistemas:
+- cardiovascular (Riediker, Cascio, Griggs, and others, 2004);
+- cerebrovascular (Wellenius, Schwartz, and Mittleman, 2005);
+- e, principalmente, respiratório (Balmes, Fine, and Sheppard, 1987; Kagawa, 1985; Uysal and Schapira, 2003; Wiwanitkit, 2008; Li, Huang, and Zou, 2008).
+
+--
+
+Do ponto de vista de saúde pública, o Material Particulado (PM) é considerado como um dos poluentes mais importantes, causando efeitos adversos em morbidade, mortalidade e admissões hospitalares (veja uma revisão compreensiva em Anderson, Thundiyil, and Stolbach, 2012).
+
+--
+
+O PM é classificado de acordo com o seu diâmetro, tendo em vista que essa característica determina a capacidade de penetração no organismo. Em especial, são considerados PM com diâmetros `\(\leq\)` 10 &amp;#181;m `\((\text{PM}_{10})\)`, `\(\leq\)` 2,5 &amp;#181;m `\((\text{PM}_{2,5})\)` e `\(\leq\)` 0,5 &amp;#181;m `\((\text{PM}_{0,5})\)`.
+
+--
+
+Embora menos prejudicial, o `\(\text{PM}_{10}\)` é o PM mais estudado na literatura. Segundo a Organização Mundial de Saúde (OMS), as crianças e os idosos formam os grupos mais impactados pelo `\(\text{PM}_{10}\)` (World Health Organization, 2018).
+
+---
+class: animated, fadeIn
+
+## Motivação - II
+
+Neste estudo são considerados os efeitos do `\(\text{PM}_{10}\)` em admissões hospitalares por causas respiratórias em crianças com 10 anos ou menos.
+
+--
+
+Muitos estudos têm mostrado que um incremento em concentrações de `\(\text{PM}_{10}\)` tende a provocar um incremento de admissões hospitalares por causas respiratórias. Veja por exemplo:
+- Chen, Chu, Tan, and others (2010);
+- Son, Lee, Park, and Bell (2013);
+- Lagravinese, Moscone, Tosetti, and Lee (2014a);
+- Oliveira, Santana, Mattos, and Leon (2016);
+- Slama, Śliwczyński, Woźnica, and others (2019).
+
+--
+
+Em geral, esses estudos fazem uso de métodos de regressão linear ou de séries temporais. Baseada em estudos similares, a OMS definiu diretrizes de qualidade do ar com níveis padrões para cada poluente.
+
+--
+
+Para o `\(\text{PM}_{10}\)`, o padrão estabelecido pela OMS é de 50 &lt;span&gt;&amp;#181;&lt;/span&gt;g/m&lt;sup&gt;3&lt;/sup&gt; para concentrações médias de 24 horas.
+
+--
+
+**Importante:** as abordagens empregadas pelos estudos acima implicitamente supõem que a relação functional entre a(s) preditora(s) e a resposta não depende do valor da(s) preditora(s).
+
+---
+class: animated, fadeIn
+
+## Motivação - III
+
+Neste estudo, nós adotamos estratégia similar a adotada em Sarnaglia, Godoi, and Rodrigues (2021).
+
+--
+
+&lt;img src="images/paper_SERRA.png" width="85%" style="display: block; margin: auto;" /&gt;
+
+--
+
+**Suposição:** É esperado que, em concentrações abaixo de um limiar desconhecido, indivíduos tolerariam os efeitos da poluição do ar, de modo que não haveria alteração na busca por atendimento médico, enquanto que, acima do referido limiar, o desconforto nos indivíduos causaria aumento de admissões hospitalares.
+
+---
+class: animated, fadeIn
+
+## Motivação - IV
+
+As figuras abaixo mostram a diferença entre a suposição usualmente feita na literatura (esquerda) e que é feita neste estudo com função de ligação identidade (direita).
+
+--
+
+.pull-left[
+&lt;img src="images/linear_admissions.png" width="70%" style="display: block; margin: auto;" /&gt;
+]
+.pull-right[
+&lt;img src="images/segmented_admissions.png" width="70%" style="display: block; margin: auto;" /&gt;
+]
+
+--
+
+Nesse contexto, o modelo de regressão segmentada se torna uma alternativa extremamente atrativa.
+
+---
+class: animated, fadeIn
+
+## Motivação - V
+
+No modelo de regressão segmentada, os pontos de mudança (ou de quebra) são parâmetros que devem ser estimados dos dados.
+
+--
+
+Feder (1975a) mostrou que, no modelo de regressão segmentada, a verossimilhança é apenas diferenciável por partes, o que viola as condições de regularidade clássicas.
+
+--
+
+Do ponto de vista clássico, para contornar esse problema, Muggeo (2003) propõe um método iterativo baseado na aproximação da verossimilhança via expansão de Taylor de primeira ordem.
+
+--
+
+Por outro lado, do ponto de vista bayesiano, métodos de Monte Carlo via Cadeias de Markov (MCMC) podem ser computacionalmente custosos. Isso motiva o estudo de técnicas alternativas para amostrar da distribuição _a posteriori_
+
+--
+
+Pelo nosso conhecimento, esse problema não foi abordado na literatura até o momento. Este estudo visa preencher essa lacuna.
+
+--
+
+**Objetivo:** Considerar a inferência bayesiana do modelo de regressão segmentado para dados de contagem, utilizando aproximação de Laplace para amostrar da distribuição _a posteriori_. 
+
+---
+class: animated, fadeIn
+
+## Motivação - VI
+
+**Principais dificuldades:**
+- o espaço paramétrico correspondente ao ponto de quebra é limitado, o que pode tornar a aproximação de Laplace imprecisa;
+- a densidade _a posteriori_ é não diferenciável nos pontos de quebra, o que impede o cálculo de derivadas necessárias (mesmo que numéricas).
+
+--
+
+No decorrer da apresentação veremos como esses problemas foram contornados.
+
+--
+
+**Desempenho:** Avaliado empiricamente via estudo de simulação de Monte Carlo. Foram considerados o método iterativo proposto por Muggeo (2003) e um método MCMC ingênuo implementado em JAGS (Plummer, 2003).
+
+--
+
+**Ilustração:** O estudo do efeito da concentração de `\(\text{PM}_{10}\)` no número de internações hospitalares foi realizado por meio da metodologia proposta.
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+# Modelo Linear Generalizado Segmentado
+
+---
+class: animated, fadeIn
+## GLM
+
+Em um Modelo Linear Generalizado (GLM) usual para uma variável resposta `\(Y_i\)` e um vetor de covariáveis `\(X_i = (X_{i1}, \ldots, X_{ip})'\)`, temos que o preditor linear `\(\eta_i\)` e a média `\(\mu_i = E(Y_i)\)` estão ligados por
+$$
+\eta_i = g(\mu_i) = \zeta_0 + X_i'\zeta,
+$$
+em que `\(g\)` é a função de ligação, `\(\zeta_0\)` é o intercepto e `\(\zeta = (\zeta_1, \ldots, \zeta_p)'\)` é o vetor de coeficientes associados à `\(X_i\)`.
+
+--
+
+**Comentários:**
+- Como o próprio nome já diz, o efeito das covariáveis `\(X_i\)` no preditor linear `\(\eta_i\)` é _linear_;
+- Esse efeito é o mesmo, independente do valor da covariável. Por exemplo:
+  * se `\(\zeta_1 = 2\)` e passarmos o valor de `\(X_{i1}\)` de `\(0\)` para `\(1\)`, o incremento em `\(\eta_i\)` será `\(2\)`;
+  * esse mesmo incremento ocorreria se o valor de `\(X_{i1}\)` de `\(100\)` para `\(101\)`.
+
+--
+
+Dessa forma, um GLM usual não é capaz de explicar o efeito do `\(\text{PM}_{10}\)` em admissões hospitalares, sob a suposição que fizemos.
+
+--
+
+De acordo com nossa suposição, o `\(\text{PM}_{10}\)` só provocaria aumento de admissões se ultrapassasse um nível crítico. Em outras palavras, o efeito da covariável muda de acordo com o valor da mesma.
+
+---
+class: animated, fadeIn
+## Seg-GLM - I
+
+Para explicar adequadamente o fenômeno, é necessário permitir que o efeito de ao menos uma das covariáveis mude de acordo com o valor da covariável.
+
+--
+
+Por simplicade, assuma que apenas uma covariável, `\(Z_i\)`, apresente essa mudança de efeito. O preditor linear de um modelo linear generalizado segmentado (Seg-GLM) é dado por 
+`$$\eta_i = g(\mu_i) = \zeta_0 + X_i'\zeta + \alpha Z_i + \beta(Z_i - \psi)_{+},$$`
+em que `\((Z_i - \psi)_{+} = (Z_i - \psi)I_{(Z_i &gt; \psi)}\)` e `\(I_{(\cdot)}\)` é a função indicadora.
+
+--
+
+**Comentários:**
+- O efeito de `\(Z_i\)` no preditor linear quando `\(Z_i \leq \psi\)` é `\(\alpha\)`;
+- O efeito de `\(Z_i\)` no preditor linear quando `\(Z_i &gt; \psi\)` é `\(\alpha + \beta\)`;
+- `\(\psi\)` é denominado de ponto de mudança, ou de quebra.
+
+--
+
+Assim, o ponto de quebra `\(\psi\)` particiona o suporte de `\(Z_i\)` em dois segmentos, `\([Z_i \leq \psi]\)` e `\([Z_i &gt; \psi]\)`, e `\(\beta\)` representa a diferença de _slopes_ em cada um desses segmentos.
+
+---
+class: animated, fadeIn
+## Seg-GLM - II
+
+O modelo Seg-GLM apresentado no slide anterior pode ser generalizado para acomodar mais de um ponto de quebra (Patricio, Sarnaglia, Molinares, and Azevedo, 2021, por exemplo) e mais de uma covariável com relação segmentada. Seguiremos com a definição anterior por simplicidade.
+
+--
+
+A equação que define um Seg-GLM mostra que a relação entre `\(Z_i\)` e `\(\eta_i\)` é não linear, mas linear por partes, sendo que é assegurada a continuidade entre os segmentos de reta que compõem essa relação.
+
+--
+
+Se o ponto de mudança `\(\psi\)` fosse conhecido, o Seg-GLM poderia ser facilmente estimado como um GLM usual em cada segmento da covariável `\(Z_i\)`.
+
+--
+
+No entanto, na grande maioria das casos, `\(\psi\)` é desconhecido, sendo que um dos principais objetivos da análise é justamente estimar o seu valor.
+
+--
+
+Segundo Feder (1975b), a inferência em modelos lineares segmentados é desafiadora, já que a verossimilhança não é diferenciável no ponto de quebra.
+
+--
+
+Muggeo (2003) e trabalhos subsequentes introduziram métodos interativos que podem ser usados para realizar a estimação do ponto de vista frequentista, contornando esse problema.
+
+---
+class: animated, fadeIn
+## Seg-GLM - III
+
+O método interativo consiste em aproximar `\(g(\mu_i)\)` via expansão de Taylor de primeira ordem de `\((Z_i-\psi)_+\)` em torno de um "chute" `\(\psi^{*}\)` para o ponto de mudança, obtendo
+`$$\eta_i = g(\mu_i) \approx \zeta_0 + \vec{X}_{i}'\zeta + \alpha Z_i + \beta(Z_i - \psi^{*})_+ + \gamma(- I_{(Z_i&gt;\psi^{*})}),$$`
+em que `\(\gamma = \beta(\psi - \psi^{*})\)`.
+
+--
+
+Para `\(\psi^{*}\)` fixo, `\(U_i^* = (Z_i - \psi^{*})_{+}\)` e `\(V_i^* = -I_{(Z_i&gt;\psi^{*})}\)` podem ser interpretadas como novas covariáveis, de modo que a equação acima é interpretada como o preditor linear de um GLM não segmentado.
+
+--
+
+Assim, podemos utilizar máxima verossimilhança para estimar os coeficientes `\(\zeta_0\)`, `\(\zeta\)`, `\(\alpha\)`, `\(\beta\)` e `\(\gamma\)` no valor "chutado" para o ponto de quebra `\((\psi^{*})\)`. A estimativa do ponto de mudança pode então ser corrigida por `\(\psi = \psi^{*} + \frac{\gamma}{\beta}\)`.
+
+--
+
+O procedimento é repetido com a nova estimativa do ponto de quebra no lugar de `\(\psi^{*}\)`.
+
+--
+
+Repetimos esse processo até que algum critério de convergência ser atingido.
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+# Metodologia proposta
+
+---
+class: animated, fadeIn
+## Inferência Bayesiana
+
+Neste estudo, a inferência do modelo Seg-GLM é realizada sob o paradigma bayesiano.
+
+--
+
+Nesse caso, observada a amostra `\(\mathcal{Y} = (Y_1, \ldots, Y_n)\)`, a inferência se baseia na distribuição _a posteriori_
+`$$\pi(\theta|\mathcal{Y}) = \frac{f(\mathcal{Y}|\theta)\pi(\theta)}{\int f(\mathcal{Y}|\theta)\pi(\theta) d\theta},$$`
+em que `\(\theta = (\zeta_0, \zeta, \alpha, \beta, \psi)\)` é o vetor de parâmetros, `\(f(\mathcal{Y}|\theta)\)` é a verossimilhança e `\(\pi(\theta)\)` é a distribuição _a priori_ de `\(\theta\)`.
+
+--
+
+A primeira tentativa seria utilizar métodos MCMC para gerar valores de `\(\pi(\theta|\mathcal{Y})\)`.
+
+--
+
+**Vantagem:** Métodos já implementados em pacotes do software R, como JAGS e STAN.
+
+--
+
+**Problema:** Alto custo computacional.
+
+--
+
+**Ideia:** Utilizar o método de Laplace para aproximar a distribuição _a posteriori_ e facilitar a amostragem.
+
+---
+class: animated, fadeIn
+## Método de Laplace - I
+
+Utiliza expansão de Taylor para aproximar densidades, chegando ao núcleo de uma normal.
+
+--
+
+Definindo `\(h(\theta) = \log[\pi(\theta|\mathcal{Y})]\)`, a aproximação de Taylor de segunda ordem em torno de `\(\hat{\theta}\)` fornece
+`$$\exp[h(\theta)] \approx \exp[\textstyle h(\hat{\theta})+h^\prime(\hat{\theta})(\theta-\hat{\theta})+\frac{1}{2}(\theta-\hat{\theta})^Th^{\prime\prime}(\hat{\theta})(\theta-\hat{\theta})],$$`
+em que `\(h^\prime(\hat{\theta}) = \frac{\partial h}{\partial \theta^T}\)` e `\(h^{\prime\prime}(\hat{\theta}) = \frac{\partial^2h}{\partial\theta\partial\theta^T}\)`.
+
+--
+
+Note que:
+- Escolhendo `\(\hat{\theta} = \mathrm{argmax}_{\theta}[\pi(\theta|\mathcal{Y})]\)`, obtemos `\(h^\prime(\hat{\theta}) = 0\)`;
+- Como `\(\hat{\theta}\)` é fixo, então `\(h(\hat{\theta})\)` é constante.
+
+--
+
+Assim, concluímos que
+
+`$$\pi(\theta|\mathcal{Y}) = \exp[h(\theta)] \approx c\cdot\exp[\textstyle\frac{1}{2}(\theta-\hat{\theta})^T\Sigma^{-1}(\theta-\hat{\theta})],$$`
+em que `\(c = h(\hat{\theta})\)` e `\(\Sigma = [h^{\prime\prime}(\hat{\theta})]^{-1}\)`.
+
+---
+class: animated, fadeIn
+## Método de Laplace - II
+
+Assim, o método acima fornece uma aproximação para a distribuição _a posteriori_, cujo o núcleo reconhecemos ser o de uma normal multivariada.
+
+--
+
+**Ideia:** Gerar amostras de uma normal que aproximem a distribuição _a posteriori_.
+
+--
+
+Para os parâmetros `\(\zeta_{0}\)`, `\(\zeta\)`, `\(\alpha\)` e `\(\beta\)`, utilizou-se as seguintes distribuições _a priori_:
+- `\(\zeta_{0} \sim N(\mu_{\zeta_{0}},\sigma^2_{\zeta_{0}})\)`;
+- `\(\zeta \sim N_{p}(\mu_{\zeta},\Sigma)\)`;
+- `\(\alpha \sim N(\mu_{\alpha},\sigma^2_{\alpha})\)`;
+- `\(\beta \sim N(\mu_{\beta},\sigma^2_{\beta})\)`.
+
+--
+
+**Problemas:**
+1. O espaço paramétrico do parâmetro `\(\psi\)` não é ilimitado como o de uma normal, pois `\(\psi\in[\min(Z_i), \max(Z_i)]\)`, de modo que a aproximação normal pode fornecer resultados insatisfatórios;
+2. O fato de a verossimilhança `\(f(\mathcal{Y}|\theta)\)` não ser diferenciável em `\(\psi\)`, impede a obtenção de `\(h^{\prime\prime}(\hat{\theta})\)`, de modo que `\(\Sigma\)` não pode ser obtida.
+
+---
+class: animated, fadeIn
+## Solução para o problema 1
+
+**Ideia:** Reparametrizar o modelo, reescrendo-o em função de `\(\rho = \rho(\psi)\)`, de modo que `\(\rho \in \mathbb{R}\)`.
+
+--
+
+**Proposta:** Utilizar a relação
+`$$\psi(\rho) = \min(Z_i) + (\max(Z_i) - \min(Z_i)) \cdot F(\rho|\phi),$$`
+em que `\(F\)` é qualquer função de distribuição cumulativa indexada por um vetor de hiperparâmetros `\(\phi\)` e que tenha suporte em `\(\mathbb{R}\)`.
+
+--
+
+Equivalentemente, temos que
+`$$\rho(\psi) = F^{-1}\left(\left.\frac{\psi - \min(Z)}{\max(Z) - \min(Z)} \right| \phi\right).$$`
+
+--
+
+**Importante:** Utilizando a transformação acima, pelo método da transformação inversa, se atribuírmos _a priori_ `\(\rho \sim F(.|\phi)\)`, induzimos `\(\psi \sim U(\min(Z_i), \max(Z_i))\)` _a priori_.
+
+---
+class: animated, fadeIn
+## Solução para o problema 2
+
+Como mostrado anteriormente, na densidade aproximada, a matriz hessiana `\(h^{\prime\prime}(\hat{\theta})\)` corresponde à inversa da matriz de covariância `\(\Sigma\)` do vetor paramétrico.
+
+--
+
+**Ideia:** Utilizamos um método _bootstrap_ do tipo _case resampling_ para obter `\(B\)` máximos da distribuição _a posteriori_, `\(\hat{\theta}_1, \ldots, \hat{\theta}_B\)`.
+
+--
+
+A amostra _bootstrap_ `\(\hat{\theta}_1, \ldots, \hat{\theta}_B\)` foi utilizada para estimar `\(\Sigma\)` por meio de
+`$$\hat{\Sigma} = \frac{1}{B}\sum_{b = 1}^B(\hat{\theta}_b - \bar\theta)(\hat{\theta}_b - \bar\theta)'.$$`
+em que `\(\bar\theta = \textstyle \frac{1}{B} \sum_{b = 1}^B\hat{\theta}_b\)`.
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+# Experimento de Monte Carlo
+
+---
+class: animated, fadeIn
+## Desenho do experimento - I
+
+**Objetivo:** Comparar o método recursivo apresentado anteriormente com a metodologia bayesiana proposta.
+
+--
+
+A primeira já está implementada no pacote `segmented` do software R (R Core Team, 2021). A metodologia proposta foi implementada no mesmo software. Para efeitos de comparação, também foi considerado um MCMC ingênuo implementado em JAGS (Plummer, 2003).
+
+--
+
+**Alguns detalhes:**
+- número de replicações `\(m = 1000\)`;
+- tamanhos de amostras `\(n = 600\)`, `\(1200\)` e `\(2400\)`;
+- apenas uma covariável `\(Z\)` com um único ponto de quebra `\(\psi\)`.
+
+--
+
+No intuito de que a simulação reproduzisse o comportamento hipotetizado para os dados reais de admissões hospitalares (resposta, `\(Y_i\)` ) e `\(\text{PM}_{10}\)` (explicativa, `\(Z_i\)` ), similar a Sarnaglia, Godoi, and Rodrigues (2021), adotamos:
+- `\(Y_i \sim \text{Pois}(\mu_i)\)`, com `\(\log(\mu_i) = \eta_i = \zeta_0 + \beta I_{(Z_i &gt; \psi)}\)` (ou seja `\(\alpha = 0\)` );
+- `\(Z_i \sim \text{GG}(s, m, f)\)`, com parâmetros de forma `\(s = 3.687\)`, de escala `\(m = 46.398\)` e família `\(f = 1.311\)`.
+
+---
+class: animated, fadeIn
+## Desenho do experimento - II
+
+Utilizamos os seguintes valores para os parâmetros `\(\zeta_0\)`, `\(\beta\)` e `\(\psi\)`:
+
+
+| Cenário| `\(\zeta_0\)`| `\(\beta\)`| `\(\psi\)`|
+|-------:|---------:|-------:|------:|
+|       1|    -0.034|   0.007|  23.59|
+|       2|    -0.034|   0.009|  31.72|
+|       3|    -0.034|   0.014|  41.22|
+
+--
+
+Similar a Sarnaglia, Godoi, and Rodrigues (2021), os valores de `\(\psi\)` foram tomados como o primeiro, o segundo e o terceiro quartis de `\(Z_i\)`. Os valores de `\(\zeta_0\)` e `\(\beta\)` foram escolhidos para garantir que:
+- Para `\(Z_i &lt; \psi\)`, o valor esperado seja 0,967 (média de admissões diárias em concentrações menores que o quantil 0,1 de `\(\text{PM}_{10}\)` );
+- Para `\(Z = 57,34\)`, (quantil 0,95 de `\(Z_i\)` ), o valor esperado seja de 1,207 (média de admissões diárias em concentrações superiores ao quantil 0,9 de `\(\text{PM}_{10}\)` ).
+
+---
+class: animated, fadeIn
+## Desenho do experimento - III
+
+&lt;img src="images/expected_simulation.png" width="50%" style="display: block; margin: auto;" /&gt;
+
+---
+class: animated, fadeIn
+## Calibragem do método proposto
+
+Para a aplicação da metodologia proposta e no código em JAGS, consideramos _a priori_ de `\(\zeta_0 \sim \text{N}(0,100)\)` e `\(\beta \sim \text{N}(0,100)\)`.
+
+--
+
+Já para o parâmetro transformado `\(\rho\)`, duas propostas foram consideradas para a distribuição `\(F\)`, a normal-assimétrica e a t-assimétrica.
+
+--
+
+Foram considerados densidades assimétricas para ligar `\(\rho\)` a `\(\psi\)` para melhor explicar o desbalanceamento do número de observações de `\(Z_i\)` pré e pós ponto de quebra nos cenários estudados.
+
+--
+
+Como mencionado previamente, para induzir uma distribuição _a priori_ uniforme para `\(\psi\)`, fixamos _a priori_ `\(\rho \sim F\)`.
+
+--
+
+Como hiperparâmetros de `\(F\)`, para ambas distribuições, fixamos `\(\xi=0\)` (posição), e utilizamos `\(\omega\)` = `\(e^C\)` (escala), em que `\(C \sim \text{N}(1,1)\)`, e `\(\lambda \sim \text{N}(0, 9)\)` (assimetria). No caso da t-assimétrica, fixamos `\(\nu = 5\)` (curtose).
+
+--
+
+Finalmente, para o _case resampling_, foram fixadas `\(B = 200\)` réplicas _bootstrap_ para cada uma das réplicas de Monte Carlo.
+
+---
+class: animated, fadeIn
+## Resultados - I
+
+
+Table: Cobertura e intervalos de credibilidade para o Cenário 1.
+
+|  `\(n\)`|Método     | Cob. `\(\zeta\)`| Cob. `\(\beta\)`| Cob. `\(\psi\)`| Amp. `\(\zeta\)`| Amp. `\(\beta\)`| Amp. `\(\psi\)`|
+|----:|:----------|------------:|------------:|-----------:|------------:|------------:|-----------:|
+|  600|Segmented  |        0.941|        0.932|       0.748|        0.264|       0.0260|      45.430|
+|     |Laplace SN |        0.966|        0.935|       0.898|        0.218|       0.0300|      30.320|
+|     |Laplace ST |        0.964|        0.935|       0.909|        0.216|       0.0330|      31.952|
+| 1200|Segmented  |        0.921|        0.924|       0.772|        0.189|       0.0160|      34.895|
+|     |Laplace SN |        0.946|        0.944|       0.915|        0.158|       0.0192|      26.489|
+|     |Laplace ST |        0.938|        0.932|       0.918|        0.159|       0.0200|      28.183|
+| 2400|Segmented  |        0.901|        0.944|       0.817|        0.157|       0.0100|      29.976|
+|     |Laplace SN |        0.917|        0.968|       0.952|        0.123|       0.0110|      22.516|
+|     |Laplace ST |        0.912|        0.951|       0.916|        0.120|       0.0110|      22.741|
+
+---
+class: animated, fadeIn
+## Resultados - II
+
+
+Table: Cobertura e intervalos de credibilidade para o Cenário 2.
+
+|  `\(n\)`|Método     | Cob. `\(\zeta\)`| Cob. `\(\beta\)`| Cob. `\(\psi\)`| Amp. `\(\zeta\)`| Amp. `\(\beta\)`| Amp. `\(\psi\)`|
+|----:|:----------|------------:|------------:|-----------:|------------:|------------:|-----------:|
+|  600|Segmented  |        0.969|        0.957|       0.851|        0.234|       0.0290|     39.7550|
+|     |Laplace SN |        0.973|        0.947|       0.976|        0.208|       0.0340|     27.4240|
+|     |Laplace ST |        0.961|        0.950|       0.967|        0.205|       0.0360|     28.4200|
+| 1200|Segmented  |        0.959|        0.955|       0.868|        0.169|       0.0210|     30.4590|
+|     |Laplace SN |        0.969|        0.966|       0.960|        0.150|       0.0200|     24.0340|
+|     |Laplace ST |        0.956|        0.954|       0.968|        0.148|       0.0210|     24.7040|
+| 2400|Segmented  |        0.940|        0.953|       0.889|        0.121|       0.0120|     23.8083|
+|     |Laplace SN |        0.941|        0.977|       0.961|        0.113|       0.0130|     20.9890|
+|     |Laplace ST |        0.951|        0.973|       0.977|        0.112|       0.0131|     21.3210|
+
+---
+class: animated, fadeIn
+## Resultados - III
+
+
+Table: Cobertura e intervalos de credibilidade para o Cenário 3.
+
+|  `\(n\)`|Método     | Cob. `\(\zeta\)`| Cob. `\(\beta\)`| Cob. `\(\psi\)`| Amp. `\(\zeta\)`| Amp. `\(\beta\)`| Amp. `\(\psi\)`|
+|----:|:----------|------------:|------------:|-----------:|------------:|------------:|-----------:|
+|  600|Segmented  |        0.956|        0.952|       0.924|       0.2090|       0.0350|      33.905|
+|     |Laplace SN |        0.965|        0.976|       0.969|       0.1960|       0.0430|      25.423|
+|     |Laplace ST |        0.954|        0.974|       0.973|       0.1950|       0.0420|      25.166|
+| 1200|Segmented  |        0.946|        0.943|       0.913|       0.1410|       0.0240|      24.433|
+|     |Laplace SN |        0.954|        0.971|       0.975|       0.1381|       0.0270|      21.814|
+|     |Laplace ST |        0.955|        0.963|       0.972|       0.1370|       0.0270|      22.070|
+| 2400|Segmented  |        0.946|        0.908|       0.870|       0.0980|       0.0165|      18.612|
+|     |Laplace SN |        0.962|        0.960|       0.965|       0.0990|       0.0190|      19.145|
+|     |Laplace ST |        0.954|        0.962|       0.959|       0.0990|       0.0180|      19.091|
+
+---
+class: animated, fadeIn
+## Discussão
+
+Com respeito a `\(\psi\)`, a metodologia proposta forneceu coberturas acima de 95\% nos Cenários 2 e 3 para todos tamanhos amostrais. Os resultados mostram que o Cenário 1 de fato é o mais desafiador, sobretudo com respeito ao parâmetro `\(\psi\)`.
+
+--
+
+Conjecturamos que isso se deve ao fato de o parâmetro `\(\beta\)` ser muito próximo de zero, o que torna menos evidente a mudança de inclinação entre os dois segmentos, levando a um aumento de incerteza sobre a verdadeira posição do ponto de quebra.
+
+--
+
+No Cenário 1, em algumas réplicas, a análise gráfica da verossimilhança com respeito aos parâmetros `\(\beta\)` e `\(\psi\)` apontou para um comportamento _flat_, o que corrobora essa hipótese. Fica evidente a superioridade da metodologia proposta quando comparada à metodologia clássica, quer seja fazendo uso da normal-assimétrica, ou da t-assimétrica.
+
+--
+
+Com respeito as amplitudes, percebemos que os intervalos obtidos pela metodologia proposta são mais informativos dos que os obtidos pela metodologia clássica, principalmente quando analisamos o parâmetro `\(\psi\)`.
+
+--
+
+Foi realizado um estudo adicional com menos réplicas, considerando-se o MCMC via JAGS. Os resultados mostraram que, para quaisquer cenários, a cobertura e a amplitude média apresentaram desempenho muito pior do que os das demais técnicas, principalmente em relação ao parâmetro de quebra `\(\psi\)`.
+
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+# Ilustração em dados reais
+
+---
+class: animated, fadeIn
+## Descrição dos dados
+
+**Período:** 1º de janeiro de 2010 até 31 de agosto de 2014.
+
+--
+
+Dados de poluição e meteorologia foram obtidos da Rede Automática de Monitoramento da Qualidade do Ar (RAMQAr), que consiste de nove estações de monitoramento. Considerou-se os dados das estações Laranjeiras (poluente) e Carapina (meteorológicos).
+
+--
+
+Dados de admissões hospitalares de crianças com 10 anos ou menos por causas respiratórias (CID-10 - códigos J00-J99) foram fornecidos pelo Hospital Infantil Nossa Senhora da Glória (HINSG). Foi necessária aplicação de análise de correlação canônica como pré-processamento (Sarnaglia, Godoi, and Rodrigues, 2021).
+
+--
+
+O banco de dados agregado compreende 1209 dias e foi previamente analisado em Sarnaglia, Godoi, and Rodrigues (2021).
+
+--
+
+Outras covariáveis consideradas no estudo foram: umidade relativa do ar (RH, em %), a velocidade média do vento (WS, em m/s), temperatura média (T, em ºC), amplitude diária de temperatura (TR, em ºC) e uma variável denominada `fat`, que indica se a observação corresponde a dias útil ( _WorkDay_ ), ou em finais de semana ou feriados ( _DayOff_ ).
+
+---
+class: animated, fadeIn
+## Estimativas - I
+
+
+|Parâmetro  |Método     | Estimativa| EP ou DP| Lim. Inf| Lim. Sup|   Ampl|
+|:----------|:----------|----------:|--------:|--------:|--------:|------:|
+|Intercepto |Segmented  |     3.6619|   0.6330|   2.4212|   4.9026| 2.4815|
+|           |Laplace SN |     3.6826|   0.4614|   2.7941|   4.6012| 1.8071|
+|           |Laplace ST |     3.5215|   0.4722|   2.6019|   4.4589| 1.8571|
+|           |JAGS       |     3.4611|   0.6256|   2.2376|   4.6658| 2.4281|
+|fat        |Segmented  |    -0.1781|   0.0672|  -0.3099|  -0.0464| 0.2635|
+|           |Laplace SN |    -0.1747|   0.0742|  -0.3204|  -0.0306| 0.2898|
+|           |Laplace ST |    -0.1745|   0.0768|  -0.3214|  -0.0249| 0.2965|
+|           |JAGS       |    -0.1788|   0.0684|  -0.3120|  -0.0428| 0.2692|
+|RH         |Segmented  |    -0.0260|   0.0064|  -0.0385|  -0.0135| 0.0249|
+|           |Laplace SN |    -0.0256|   0.0040|  -0.0334|  -0.0179| 0.0155|
+|           |Laplace ST |    -0.0238|   0.0040|  -0.0314|  -0.0157| 0.0157|
+|           |JAGS       |    -0.0243|   0.0063|  -0.0364|  -0.0117| 0.0247|
+
+---
+class: animated, fadeIn
+## Estimativas - II
+
+
+|Parâmetro |Método     | Estimativa| EP ou DP| Lim. Inf| Lim. Sup|   Ampl|
+|:---------|:----------|----------:|--------:|--------:|--------:|------:|
+|WS        |Segmented  |    -0.2768|   0.0790|  -0.4316|  -0.1220| 0.3096|
+|          |Laplace SN |    -0.2676|   0.0750|  -0.4076|  -0.1124| 0.2951|
+|          |Laplace ST |    -0.2608|   0.0756|  -0.4096|  -0.1146| 0.2950|
+|          |JAGS       |    -0.2613|   0.0818|  -0.4202|  -0.1023| 0.3179|
+|T         |Segmented  |    -0.0400|   0.0131|  -0.0658|  -0.0143| 0.0515|
+|          |Laplace SN |    -0.0425|   0.0115|  -0.0657|  -0.0205| 0.0452|
+|          |Laplace ST |    -0.0423|   0.0116|  -0.0650|  -0.0196| 0.0454|
+|          |JAGS       |    -0.0393|   0.0130|  -0.0642|  -0.0136| 0.0506|
+|TR        |Segmented  |    -0.0380|   0.0128|  -0.0631|  -0.0128| 0.0502|
+|          |Laplace SN |    -0.0392|   0.0114|  -0.0620|  -0.0173| 0.0447|
+|          |Laplace ST |    -0.0385|   0.0122|  -0.0623|  -0.0142| 0.0482|
+|          |JAGS       |    -0.0367|   0.0128|  -0.0632|  -0.0129| 0.0503|
+
+---
+class: animated, fadeIn
+## Estimativas - III
+
+
+|Parâmetro       |Método     | Estimativa| EP ou DP| Lim. Inf| Lim. Sup|    Ampl|
+|:---------------|:----------|----------:|--------:|--------:|--------:|-------:|
+|PM&lt;sub&gt;10&lt;/sub&gt; |Segmented  |     0.0157|   0.0045|   0.0070|   0.0244|  0.0175|
+|                |Laplace SN |     0.0157|   0.0039|   0.0079|   0.0231|  0.0152|
+|                |Laplace ST |     0.0154|   0.0041|   0.0075|   0.0233|  0.0158|
+|                |JAGS       |     0.0172|   0.0292|   0.0040|   0.0237|  0.0198|
+|&amp;#x1D713;       |Segmented  |    34.7430|   5.1110|  24.7147|  44.7705| 20.0558|
+|                |Laplace SN |    34.3176|   4.8748|  24.9453|  43.9420| 18.9967|
+|                |Laplace ST |    34.2042|   4.9079|  24.8698|  43.7592| 18.8894|
+|                |JAGS       |    32.7542|  14.2413|   4.8842|  42.4683| 37.5841|
+
+---
+class: animated, fadeIn
+## Discussão - I
+
+Para `\(\psi\)`, vemos que os limites inferior e superior dos fornecidos pelo pacote `segmented` e pela metodologia proposta com (normal ou t assimétricas) são bastante semelhantes. Sendo que a amplitude do intervalo do `segmented` é ligeiramente maior.
+
+--
+
+O MCMC executado em JAGS apresentou resultado muito distinto dos demais, com um limite inferior bastante  diferente e com uma amplitude muito grande. 
+
+--
+
+As estimativas de `\(\psi\)`, em torno de 34 &amp;#181;g/m&lt;sup&gt;3&lt;/sup&gt;, ainda que com a limitação dos dados, sugerem que a diretriz da OMS fixada em 50 &amp;#181;g/m&lt;sup&gt;3&lt;/sup&gt;, não seria capaz de proteger a saúde das crianças, sendo que índices superiores a 34 &amp;#181;g/m&lt;sup&gt;3&lt;/sup&gt; de `\(\text{PM}_{10}\)` já provocariam impacto em admissões hospitalares.
+
+--
+
+Uma vantagem do método que propomos, é que conseguimos incorporar a natureza assimétrica de `\(\psi\)` no processo de estimação e, a partir dessa informação, obter os intervalos de credibilidade HPD, enquanto que, na metodologia clássica, o intervalo de confiança é obtido via normalidade assintótica, o que inclusive pode fornecer intervalos com valores inadmissíveis para `\(\psi\)`.
+
+---
+class: animated, fadeIn
+## Discussão - II
+
+&lt;img src="images/hist_psis.png" width="70%" style="display: block; margin: auto;" /&gt;
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+# Referências
+
+---
+class: animated, fadeIn
+### Referências - I
+
+Anderson, J. O., J. G. Thundiyil, and A. Stolbach (2012). "Clearing the
+air: a review of the effects of particulate matter air pollution on
+human health". In: _Journal of Medical Toxicology_ 8.2, pp. 166-175.
+
+Balmes, J. R., J. M. Fine, and D. Sheppard (1987). "Symptomatic
+Bronchoconstriction after Short-Term Inhalation of Sulfur Dioxide". In:
+_American Review of Respiratory Disease_ 136, pp. 1117-21.
+
+Chen, R., C. Chu, J. Tan, et al. (2010). "Ambient air pollution and
+hospital admission in Shanghai, China". In: _Journal of Hazardous
+Materials_ 181.1-3, pp. 234-240.
+
+Feder, P. I. (1975b). "On asymptotic distribution theory in segmented
+regression problems-identified case". In: _The Annals of Statistics_
+3.1, pp. 49-83.
+
+Feder, P. I. (1975a). "The log likelihood ratio in segmented
+regression". In: _The Annals of Statistics_ 3.1, pp. 84-97.
+
+Kagawa, J. (1985). "Evaluation of biological significance of nitrogen
+oxides exposure." In: _The Tokai Journal of Experimental and Clinical
+Medicine_ 10.4, pp. 348-353.
+
+---
+class: animated, fadeIn
+### Referências - II
+
+Lagravinese, R., F. Moscone, E. Tosetti, et al. (2014a). "The impact of
+air pollution on hospital admissions: evidence from Italy". In:
+_Regional Science and Urban Economics_ 49, pp. 278-285.
+
+Li, H. L., G. H. Huang, and Y. Zou (2008). "An integrated
+fuzzy-stochastic modeling approach for assessing health-impact risk
+from air pollution". In: _Stochastic Environmental Research and Risk
+Assessment_ 22.6, pp. 789-803.
+
+Muggeo, V. M. (2003). "Estimating regression models with unknown
+break-points". In: _Statistics in Medicine_ 22.19, pp. 3055-3071.
+
+Oliveira, M. S., M. F. E. Santana, I. E. Mattos, et al. (2016).
+"Association between air pollution and hospital admission from
+respiratory disease: construction of basics parameters to assess the
+impact of national policy Environmental Health Surveillance related to
+Air Quality in Brazil". In: _American International Journal of Biology
+_ 4.1, pp. 1-19.
+
+Patricio, S. C., A. J. Sarnaglia, F. A. F. Molinares, et al. (2021).
+"Oxygen uptake plateau diagnosis using a new developed segmented
+regression estimation method for autocorrelated data". In: _IEEE
+Transactions on Biomedical Engineering_ 68.11, pp. 3281-3289.
+
+---
+class: animated, fadeIn
+### Referências - III
+
+Plummer, M. (2003). _JAGS: A program for analysis of Bayesian graphical
+models using Gibbs sampling_.
+
+R Core Team (2021). _R: A Language and Environment for Statistical
+Computing_. R Foundation for Statistical Computing. Vienna, Austria.
+URL: [https://www.R-project.org/](https://www.R-project.org/).
+
+Riediker, M., W. E. Cascio, T. R. Griggs, et al. (2004). "Particulate
+matter exposure in cars is associated with cardiovascular effects in
+healthy young men". In: _American Journal of Respiratory and Critical
+Care Medicine_ 169.8, pp. 934-940.
+
+Sarnaglia, A. J., L. G. Godoi, and M. C. Rodrigues (2021). "Estimating
+critical level of PM$_10$ to affect hospital infant admissions in
+Vitória, Brazil". In: _Stochastic Environmental Research and Risk
+Assessment_, pp. 1-18.
+
+Slama, A., A. Śliwczyński, J. Woźnica, et al. (2019). "Impact of air
+pollution on hospital admissions with a focus on respiratory diseases:
+a time-series multi-city analysis". In: _Environmental Science and
+Pollution Research_ 26.17, pp. 16998-17009.
+
+---
+class: animated, fadeIn
+### Referências - IV
+
+Son, J., J. Lee, Y. H. Park, et al. (2013). "Short-term effects of air
+pollution on hospital admissions in Korea". In: _Epidemiology_, pp.
+545-554.
+
+Uysal, N. and R. M. Schapira (2003). "Effects of ozone on lung function
+and lung diseases". In: _Current Opinion in Pulmonary Medicine_ 9.2,
+pp. 144-150.
+
+Wellenius, G. A., J. Schwartz, and M. A. Mittleman (2005). "Air
+pollution and hospital admissions for ischemic and hemorrhagic stroke
+among medicare beneficiaries". In: _Stroke_ 36.12, pp. 2549-2553.
+
+Wiwanitkit, V. (2008). "PM&lt;sub&gt;10&lt;/sub&gt; in the atmosphere and incidence
+of respiratory illness in Chiangmai during the smoggy pollution". In:
+_Stochastic Environmental Research and Risk Assessment_ 22.3, pp.
+437-440.
+
+World Health Organization (2018). _Air pollution and child health:
+prescribing clean air: summary_. World Health Organization.
+
+---
+class: animated, inverse, middle, center, fadeIn, hide-logo
+## Perguntas?
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"ratio": "16:9",
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+// add `data-at-shortcutkeys` attribute to <body> to resolve conflicts with JAWS
+// screen reader (see PR #262)
+(function(d) {
+  let res = {};
+  d.querySelectorAll('.remark-help-content table tr').forEach(tr => {
+    const t = tr.querySelector('td:nth-child(2)').innerText;
+    tr.querySelectorAll('td:first-child .key').forEach(key => {
+      const k = key.innerText;
+      if (/^[a-z]$/.test(k)) res[k] = t;  // must be a single letter (key)
+    });
+  });
+  d.body.setAttribute('data-at-shortcutkeys', JSON.stringify(res));
+})(document);
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+<style>
+.logo {
+  background-image: url(images/logo_lecon.png);
+  background-size: contain;
+  background-repeat: no-repeat;
+  position: absolute;
+  top: 1em;
+  right: 1em;
+  width: 150px;
+  height: 168px;
+  z-index: 0;
+}
+</style>
+
+<script>
+document
+  .querySelectorAll(
+    '.remark-slide-content' +
+    ':not(.title-slide)' +
+    // add additional classes to exclude here, e.g.
+    // ':not(.inverse)' +
+    ':not(.hide-logo)'
+  )
+  .forEach(el => {
+    el.innerHTML += '<div class="logo"></div>';
+  });
+</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

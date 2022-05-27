@@ -1,0 +1,8 @@
+# Sumário
+
+- Motivação
+- Modelo Linear Generalizado Segmentado
+- Metodologia proposta
+- Experimento de Monte Carlo
+- Ilustração em dados reais
+- Referências
